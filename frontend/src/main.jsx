@@ -31,7 +31,7 @@ function App(){
 
   return <div>
     <header><div className="brand"><Car size={30}/><span>CarMart</span></div><button onClick={()=>{setForm(empty);setEditing(null);setShowForm(!showForm)}}><Plus size={18}/> Sell Your Car</button></header>
-    <section className="hero"><div><p className="eyebrow">PRE-OWNED. VERIFIED. SIMPLE.</p><h1>Find your next<br/><span>perfect drive.</span></h1><p>Browse quality second-hand cars or list yours in minutes.</p></div></section>
+    <section className="hero"><div><p className="eyebrow">PRE-OWNED. VERIFIED. SIMPLE.</p><h1>Find <br/><span>perfect drive.</span></h1><p>Browse quality second-hand cars or list yours in minutes.</p></div></section>
     <main>
       {showForm && <form className="form" onSubmit={save}>
         <div className="form-head"><div><small>{editing?"UPDATE LISTING":"NEW LISTING"}</small><h2>{editing?"Edit car":"Sell your car"}</h2></div><button type="button" className="close" onClick={()=>setShowForm(false)}>×</button></div>
