@@ -6,18 +6,32 @@ on:
       - main
 
 jobs:
-
   deploy:
     name: Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
 
-      # 1. Get project code
+      # 1. Get latest code from GitHub
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Copy project files to EC2
+      # 2. Stop old containers and clean old source code
+      - name: Prepare EC2
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p /home/ubuntu/car-crud
+            cd /home/ubuntu/car-crud
+
+            docker compose down || true
+
+            find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+      # 3. Copy latest project from GitHub Actions to EC2
       - name: Copy project to EC2
         uses: appleboy/scp-action@v1
         with:
@@ -27,7 +41,7 @@ jobs:
           source: "."
           target: "/home/ubuntu/car-crud"
 
-      # 3. Build and run Docker containers
+      # 4. Build and deploy latest version
       - name: Deploy with Docker Compose
         uses: appleboy/ssh-action@v1
         with:
@@ -36,6 +50,20 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/car-crud
-            docker compose down
-            docker compose up --build -d
+
+            echo "Building latest application..."
+
+            docker compose build --no-cache
+
+            echo "Starting containers..."
+
+            docker compose up -d
+
+            echo "Removing unused Docker images..."
+
             docker image prune -f
+
+            echo "Container status:"
+            docker compose ps
+
+            echo "Deployment completed successfully!"
