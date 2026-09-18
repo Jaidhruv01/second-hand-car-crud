@@ -12,26 +12,9 @@ jobs:
 
     steps:
 
-      # 1. Get latest code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Verify important files
-      - name: Verify project
-        run: |
-          echo "Latest commit:"
-          git rev-parse --short HEAD
-
-          echo "Project files:"
-          ls -la
-
-          echo "Frontend files:"
-          ls -la frontend
-
-          echo "Backend files:"
-          ls -la backend
-
-      # 3. Create deployment package
       - name: Create deployment package
         run: |
           tar \
@@ -44,10 +27,6 @@ jobs:
             docker-compose.yml \
             README.md
 
-          echo "Package created:"
-          tar -tzf deployment.tar.gz | head -50
-
-      # 4. Send package to EC2
       - name: Copy project to EC2
         uses: appleboy/scp-action@v1
         with:
@@ -57,27 +36,42 @@ jobs:
           source: "deployment.tar.gz"
           target: "/home/ubuntu"
 
-      # 5. Deploy
       - name: Deploy application
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+
           script: |
             set -e
 
-            echo "===== STOP OLD APPLICATION ====="
+            echo "===== STOP OLD COMPOSE PROJECT ====="
 
             if [ -f /home/ubuntu/car-crud/docker-compose.yml ]; then
               cd /home/ubuntu/car-crud
               docker compose down || true
             fi
 
+
+            echo "===== FREE PORT 80 ====="
+
+            OLD_CONTAINER=$(docker ps -q --filter "publish=80")
+
+            if [ -n "$OLD_CONTAINER" ]; then
+              echo "Old container using port 80:"
+              docker ps --filter "publish=80"
+
+              docker stop $OLD_CONTAINER
+              docker rm $OLD_CONTAINER
+            fi
+
+
             echo "===== CLEAN OLD SOURCE ====="
 
             rm -rf /home/ubuntu/car-crud
             mkdir -p /home/ubuntu/car-crud
+
 
             echo "===== EXTRACT LATEST CODE ====="
 
@@ -86,24 +80,32 @@ jobs:
 
             rm -f /home/ubuntu/deployment.tar.gz
 
+
+            echo "===== BUILD LATEST VERSION ====="
+
             cd /home/ubuntu/car-crud
 
-            echo "===== VERIFY FILES ====="
-
-            ls -la
-            ls -la frontend
-            ls -la backend
-
-            echo "===== BUILD DOCKER IMAGES ====="
-
             docker compose build --no-cache
+
 
             echo "===== START APPLICATION ====="
 
             docker compose up -d --force-recreate
 
+
             echo "===== CONTAINER STATUS ====="
 
             docker compose ps
+
+
+            echo "===== PORT 80 ====="
+
+            docker ps --filter "publish=80"
+
+
+            echo "===== CLEAN OLD IMAGES ====="
+
+            docker image prune -f
+
 
             echo "===== DEPLOYMENT SUCCESSFUL ====="
