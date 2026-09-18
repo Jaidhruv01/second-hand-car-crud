@@ -7,19 +7,31 @@ on:
 
 jobs:
   deploy:
+    name: Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout latest code
+
+      # 1. Get latest code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Show deployed commit
+      # 2. Verify important files
+      - name: Verify project
         run: |
-          echo "Deploying commit:"
-          git rev-parse HEAD
-          echo "Frontend files:"
-          ls -la frontend/src
+          echo "Latest commit:"
+          git rev-parse --short HEAD
 
+          echo "Project files:"
+          ls -la
+
+          echo "Frontend files:"
+          ls -la frontend
+
+          echo "Backend files:"
+          ls -la backend
+
+      # 3. Create deployment package
       - name: Create deployment package
         run: |
           tar \
@@ -27,9 +39,16 @@ jobs:
             --exclude='node_modules' \
             --exclude='dist' \
             -czf deployment.tar.gz \
-            backend frontend docker-compose.yml README.md
+            frontend \
+            backend \
+            docker-compose.yml \
+            README.md
 
-      - name: Copy package to EC2
+          echo "Package created:"
+          tar -tzf deployment.tar.gz | head -50
+
+      # 4. Send package to EC2
+      - name: Copy project to EC2
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -38,6 +57,7 @@ jobs:
           source: "deployment.tar.gz"
           target: "/home/ubuntu"
 
+      # 5. Deploy
       - name: Deploy application
         uses: appleboy/ssh-action@v1
         with:
@@ -47,19 +67,19 @@ jobs:
           script: |
             set -e
 
-            echo "===== STOPPING OLD APPLICATION ====="
+            echo "===== STOP OLD APPLICATION ====="
 
-            if [ -d /home/ubuntu/car-crud ]; then
+            if [ -f /home/ubuntu/car-crud/docker-compose.yml ]; then
               cd /home/ubuntu/car-crud
               docker compose down || true
             fi
 
-            echo "===== REMOVING OLD SOURCE ====="
+            echo "===== CLEAN OLD SOURCE ====="
 
             rm -rf /home/ubuntu/car-crud
             mkdir -p /home/ubuntu/car-crud
 
-            echo "===== EXTRACTING NEW SOURCE ====="
+            echo "===== EXTRACT LATEST CODE ====="
 
             tar -xzf /home/ubuntu/deployment.tar.gz \
               -C /home/ubuntu/car-crud
@@ -68,20 +88,22 @@ jobs:
 
             cd /home/ubuntu/car-crud
 
-            echo "===== FILES RECEIVED ====="
-            ls -la
-            ls -la frontend/src
+            echo "===== VERIFY FILES ====="
 
-            echo "===== FRESH DOCKER BUILD ====="
+            ls -la
+            ls -la frontend
+            ls -la backend
+
+            echo "===== BUILD DOCKER IMAGES ====="
 
             docker compose build --no-cache
 
-            echo "===== STARTING APPLICATION ====="
+            echo "===== START APPLICATION ====="
 
             docker compose up -d --force-recreate
 
-            echo "===== CONTAINERS ====="
+            echo "===== CONTAINER STATUS ====="
 
             docker compose ps
 
-            echo "===== DEPLOYMENT COMPLETE ====="
+            echo "===== DEPLOYMENT SUCCESSFUL ====="
